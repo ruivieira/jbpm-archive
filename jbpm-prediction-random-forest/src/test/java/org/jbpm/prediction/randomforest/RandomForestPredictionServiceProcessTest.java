@@ -16,28 +16,18 @@
 
 package org.jbpm.prediction.randomforest;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
 import org.jbpm.services.api.model.DeploymentUnit;
-import org.jbpm.services.api.model.ProcessInstanceDesc;
 import org.jbpm.test.services.AbstractKieServicesTest;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import org.kie.api.runtime.process.ProcessInstance;
-import org.kie.api.runtime.query.QueryContext;
 import org.kie.api.task.model.TaskSummary;
 import org.kie.internal.query.QueryFilter;
+
+import java.util.*;
+
+import static org.junit.Assert.*;
 
 public class RandomForestPredictionServiceProcessTest extends AbstractKieServicesTest {
 
@@ -70,61 +60,52 @@ public class RandomForestPredictionServiceProcessTest extends AbstractKieService
         // specify GROUP_ID, ARTIFACT_ID, VERSION of your kjar
         return createAndDeployUnit("org.jbpm.test.prediction", "random-forest-test", "1.0.0");
     }
-    
+
+    @Test
+    public void testRepeatedRandomForestPredictionService() {
+
+        Map<String, Object> outputs = new HashMap<>();
+
+        for (int i = 0 ; i < 20; i++) {
+            outputs = startAndReturnTaskOutputData(5, true);
+        }
+        assertTrue((double) outputs.get("confidence") > 90.0);
+        assertEquals(true, outputs.get("approved"));
+    }
     
     @Test
-    public void testRandomForestPredictionService() {
-        
-        Map<String, Object> outputs = startAndReturnTaskOutputData(5, true);
-        // first task has no predictions at all
-        assertEquals(0, outputs.size());
-        
-        outputs = startAndReturnTaskOutputData(5, true);
-        assertEquals(true, outputs.get("approved"));
-        assertEquals(10.0, outputs.get("confidence"));
-        
-        outputs = startAndReturnTaskOutputData(5, true);
-        assertEquals(true, outputs.get("approved"));
-        assertEquals(20.0, outputs.get("confidence"));
-        
-        outputs = startAndReturnTaskOutputData(5, true);
-        assertEquals(true, outputs.get("approved"));
-        assertEquals(30.0, outputs.get("confidence"));
-        
-        outputs = startAndReturnTaskOutputData(5, true);
-        assertEquals(true, outputs.get("approved"));
-        assertEquals(40.0, outputs.get("confidence"));
-        
-        outputs = startAndReturnTaskOutputData(5, true);
-        assertEquals(true, outputs.get("approved"));
-        assertEquals(50.0, outputs.get("confidence"));
-        
-        outputs = startAndReturnTaskOutputData(5, true);
-        assertEquals(true, outputs.get("approved"));
-        assertEquals(60.0, outputs.get("confidence"));
-        
-        outputs = startAndReturnTaskOutputData(5, true);
-        assertEquals(true, outputs.get("approved"));
-        assertEquals(70.0, outputs.get("confidence"));
-        
-        outputs = startAndReturnTaskOutputData(5, true);
-        assertEquals(true, outputs.get("approved"));
-        assertEquals(80.0, outputs.get("confidence"));
-        
-        outputs = startAndReturnTaskOutputData(5, true);
-        assertEquals(true, outputs.get("approved"));
-        assertEquals(90.0, outputs.get("confidence"));
-        
-        outputs = startAndReturnTaskOutputData(5, true);
-        assertNull(outputs);
-        
-        // make sure all process instances are completed
-        Collection<ProcessInstanceDesc> activeInstances = runtimeDataService.getProcessInstances(Collections.singletonList(ProcessInstance.STATE_ACTIVE), null, new QueryContext());
-        assertNotNull(activeInstances);
-        assertEquals(0, activeInstances.size());
+    public void testEqualProbabilityRandomForestPredictionService() {
+
+        Map<String, Object> outputs = new HashMap<>();
+
+        for (int i = 0 ; i < 60; i++) {
+            outputs = startAndReturnTaskOutputData(5, false);
+            outputs = startAndReturnTaskOutputData(5, true);
+        }
+
+        assertTrue((double) outputs.get("confidence") < 80.0);
     }
 
-    
+    @Test
+    public void testUnequalProbabilityRandomForestPredictionService() {
+
+        Map<String, Object> outputs = new HashMap<>();
+
+        for (int i = 0 ; i < 10; i++) {
+            outputs = startAndReturnTaskOutputData(5, false);
+        }
+        for (int i = 0 ; i < 50; i++) {
+            Map<String, Object> o = startAndReturnTaskOutputData(5, true);
+            if (o != null) { // the training hasn't stopped yet
+                outputs = o;
+            }
+        }
+
+        assertTrue((double) outputs.get("confidence") > 90.0);
+        assertEquals(true, outputs.get("approved"));
+    }
+
+
     /*
      * Helper methods
      */

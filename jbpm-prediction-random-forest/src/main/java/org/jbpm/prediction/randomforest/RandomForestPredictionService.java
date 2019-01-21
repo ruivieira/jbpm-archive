@@ -19,56 +19,84 @@ package org.jbpm.prediction.randomforest;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.jbpm.prediction.randomforest.features.BooleanValue;
-import org.jbpm.prediction.randomforest.features.IntValue;
-import org.jbpm.prediction.randomforest.features.StringValue;
 import org.kie.api.task.model.Task;
 import org.kie.internal.task.api.prediction.PredictionOutcome;
 import org.kie.internal.task.api.prediction.PredictionService;
+import org.kie.internal.task.api.prediction.features.BooleanValue;
+import org.kie.internal.task.api.prediction.features.IntValue;
+import org.kie.internal.task.api.prediction.features.StringValue;
+import org.kie.internal.task.api.prediction.features.Value;
 
 
 public class RandomForestPredictionService implements PredictionService {
     
     public static final String IDENTIFIER = "RandomForest";
     
-    private double confidenceThreshold = 90.0;
+    private int datasetSizeThreshold = 30;
     private Dataset dataset = Dataset.create();
     private RandomForest randomForest;
-    
-    // just for the sake of tests
-    private Map<String, Boolean> predictions = new HashMap<>();
-    private Map<String, Integer> predictionsConfidence = new HashMap<>();
+    private double confidenceLevelThreshold = 90.0;
 
     public String getIdentifier() {
         return IDENTIFIER;
     }
 
-    public PredictionOutcome predict(Task task, Map<String, Object> inputData) {
-        String key = task.getName() + task.getTaskData().getDeploymentId()+ inputData.get("level");
-        
-        Boolean outcome = predictions.get(key);
-        if (outcome == null) {
-            return new PredictionOutcome();
+    public Map<String, Object> getConfidence(String attribute, Map<Value, Integer> prediction) {
+
+        Map<String, Object> result = new HashMap<>();
+
+        Double currentConfidence = 0.0;
+        Value currentValue = new BooleanValue(true);
+        for (Value value : prediction.keySet()) {
+            double currentPrediction = prediction.get(value).doubleValue();
+            if (currentPrediction > currentConfidence) {
+                currentConfidence = currentPrediction;
+                currentValue = value;
+            }
         }
-        double confidence = predictionsConfidence.get(key).doubleValue();
+
+        result.put("approved", currentValue.getData());
+        result.put("confidence", currentConfidence);
+
+        return result;
+
+    }
+
+    public PredictionOutcome predict(Task task, Map<String, Object> inputData) {
 
         // create random forest
         final TreeConfiguration config = TreeConfiguration.create();
         config.setDecision("approved");
+        System.out.println("Dataset size: " + dataset.size());
+        // TODO: Random forest should take care of this verification
         if (dataset.size() > 1) {
-            randomForest = RandomForest.create(config, dataset,100, dataset.size() - 1);
-        } else {
+            randomForest = RandomForest.create(config, dataset,100, (int) Math.ceil(dataset.size() /2.0));
+        } else if (dataset.size() == 1) {
             randomForest = RandomForest.create(config, dataset,100, 1);
+        } else {
+            return new PredictionOutcome();
         }
 
-        Map<String, Object> outcomes = new HashMap<>();
-        outcomes.put("approved", outcome);
-        outcomes.put("confidence", confidence);
-        return new PredictionOutcome(confidence, confidenceThreshold, outcomes);
+        System.out.println("================================================================");
+        Item question = Item.create();
+        question.add("level", new IntValue((Integer) inputData.get("level")));
+        question.add("actor", new StringValue((String) inputData.get("ActorId")));
+        Map<Value, Integer> outcomes = randomForest.predict(question);
+
+        System.out.println("The outcome is:");
+        System.out.println(outcomes);
+
+        Map<String, Object> data = getConfidence("approved", outcomes);
+        System.out.println("Confidence:");
+        System.out.println(data);
+
+        return new PredictionOutcome((Double) data.get("confidence"), confidenceLevelThreshold, dataset.size(), datasetSizeThreshold, data);
     }
 
     public void train(Task task, Map<String, Object> inputData, Map<String, Object> outputData) {
-        String key = task.getName() + task.getTaskData().getDeploymentId() + inputData.get("level");
+
+        System.out.println("Training the RF!");
+        System.out.println("with:" + outputData.toString());
 
         final Item item = Item.create();
         item.add("level", new IntValue((Integer) inputData.get("level")));
@@ -76,13 +104,6 @@ public class RandomForestPredictionService implements PredictionService {
         item.add("approved", new BooleanValue((Boolean) outputData.get("approved")));
         dataset.add(item);
 
-
-        predictions.putIfAbsent(key, (Boolean) outputData.get("approved"));
-        
-        Integer confidenceLevel = predictionsConfidence.getOrDefault(key, 0);
-        if (confidenceLevel < 100) {
-            predictionsConfidence.put(key, confidenceLevel + 10);
-        }
     }
 
 }

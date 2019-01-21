@@ -1,7 +1,7 @@
 package org.jbpm.prediction.randomforest;
 
 
-import org.jbpm.prediction.randomforest.features.Value;
+import org.kie.internal.task.api.prediction.features.Value;
 
 import java.util.Objects;
 
