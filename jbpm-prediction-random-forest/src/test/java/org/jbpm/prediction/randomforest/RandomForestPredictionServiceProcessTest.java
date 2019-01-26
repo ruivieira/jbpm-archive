@@ -60,7 +60,10 @@ public class RandomForestPredictionServiceProcessTest extends AbstractKieService
         // specify GROUP_ID, ARTIFACT_ID, VERSION of your kjar
         return createAndDeployUnit("org.jbpm.test.prediction", "random-forest-test", "1.0.0");
     }
-
+   
+    // For this test insert a quantity of true training samples
+    // to verify the random forest class/process is functiional. 
+    // Expect confidence > 90.0 and approved to be true.
     @Test
     public void testRepeatedRandomForestPredictionService() {
 
@@ -73,6 +76,12 @@ public class RandomForestPredictionServiceProcessTest extends AbstractKieService
         assertEquals(true, outputs.get("approved"));
     }
     
+    // Insert an equal number of true and false samples, making 
+    // sure the total number of samples is larger than the dataset
+    // size threshold (default is 30.) Since the dataset size 
+    // threshold will have been met and the probability of true
+    // and false will be nearly equal, we expect confidence to be
+    // lower than 80.0.
     @Test
     public void testEqualProbabilityRandomForestPredictionService() {
 
@@ -86,6 +95,10 @@ public class RandomForestPredictionServiceProcessTest extends AbstractKieService
         assertTrue((double) outputs.get("confidence") < 80.0);
     }
 
+    // Insert a disproportionate partitioning of true and false samples
+    // of a sample set larger than the dataset size threshold. In this 
+    // case true will have higher probability and as such we expect
+    // confidence to be high.
     @Test
     public void testUnequalProbabilityRandomForestPredictionService() {
 
@@ -104,7 +117,6 @@ public class RandomForestPredictionServiceProcessTest extends AbstractKieService
         assertTrue((double) outputs.get("confidence") > 90.0);
         assertEquals(true, outputs.get("approved"));
     }
-
 
     /*
      * Helper methods
